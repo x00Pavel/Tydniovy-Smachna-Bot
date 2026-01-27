@@ -3,11 +3,14 @@ import logging
 from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from aiohttp import web
+
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters.command import Command
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
-from src.config import TELEGRAM_BOT_TOKEN, TIMEZONE
+from src.config import TELEGRAM_BOT_TOKEN, TIMEZONE, WEBHOOK_URL, WEBHOOK_PORT, WEBHOOK_PATH, WEBHOOK_SECRET
 from src.database import Database
 from src.sheets import SheetsClient
 from src.utils import get_current_week_start
@@ -53,6 +56,33 @@ def schedule_midnight_sync():
     trigger = CronTrigger(hour=0, minute=0, timezone=TIMEZONE)
     scheduler.add_job(sync_meals, trigger=trigger, id="midnight_sync")
     logger.info(f"Scheduled daily sync at midnight ({TIMEZONE})")
+
+
+@dp.startup
+async def on_startup():
+    """Handle bot startup"""
+    logger.info("Bot starting up...")
+    await sync_meals()
+
+    if not scheduler.running:
+        scheduler.start()
+        schedule_midnight_sync()
+        logger.info("Scheduler started")
+
+    if WEBHOOK_URL:
+        # Set webhook on Telegram servers
+        webhook_url = f"{WEBHOOK_URL}{WEBHOOK_PATH}"
+        await bot.set_webhook(url=webhook_url, secret_token=WEBHOOK_SECRET)
+        logger.info(f"Webhook set to: {webhook_url}")
+
+
+@dp.shutdown
+async def on_shutdown():
+    """Handle bot shutdown"""
+    logger.info("Bot shutting down...")
+    if scheduler.running:
+        scheduler.shutdown()
+        logger.info("Scheduler stopped")
 
 
 @dp.message(Command("start"))
@@ -144,30 +174,48 @@ async def process_meal_selection(callback_query: types.CallbackQuery):
         await callback_query.answer("An error occurred while selecting the meal.", show_alert=True)
 
 
-async def main():
-    """Start the bot"""
-    try:
-        # Initial sync on startup
-        logger.info("Starting bot...")
-        await sync_meals()
+def main() -> None:
+    """Start the bot with webhook or polling based on configuration"""
+    if WEBHOOK_URL:
+        start_webhook()
+    else:
+        asyncio.run(start_polling())
 
-        # Start scheduler
-        if not scheduler.running:
-            scheduler.start()
-            schedule_midnight_sync()
-            logger.info("Scheduler started")
 
-        # Start polling
-        logger.info("Bot is running. Polling for messages...")
-        await dp.start_polling(bot)
-    except Exception as e:
-        logger.error(f"Fatal error: {e}")
-        raise
-    finally:
-        await bot.session.close()
-        if scheduler.running:
-            scheduler.shutdown()
+def start_webhook() -> None:
+    """Start bot using webhook mode (behind reverse proxy)"""
+    logger.info("Starting bot in WEBHOOK mode")
+    logger.info(f"Webhook URL: {WEBHOOK_URL}")
+    logger.info(f"Webhook PORT: {WEBHOOK_PORT}")
+    logger.info(f"Webhook PATH: {WEBHOOK_PATH}")
+
+    # Create aiohttp web app
+    app = web.Application()
+
+    # Create webhook handler
+    webhook_requests_handler = SimpleRequestHandler(
+        dispatcher=dp,
+        bot=bot,
+        secret_token=WEBHOOK_SECRET,
+    )
+
+    # Register webhook handler on app
+    webhook_requests_handler.register(app, path=WEBHOOK_PATH)
+
+    # Mount dispatcher startup and shutdown hooks to app
+    setup_application(app, dp, bot=bot)
+
+    # Run web app (blocks forever)
+    web.run_app(app, host="0.0.0.0", port=WEBHOOK_PORT)
+
+
+async def start_polling() -> None:
+    """Start bot using polling mode (fallback)"""
+    logger.info("Starting bot in POLLING mode")
+    logger.info("Bot is running. Polling for messages...")
+    await dp.start_polling(bot)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
+
