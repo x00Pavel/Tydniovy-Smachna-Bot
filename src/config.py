@@ -11,6 +11,7 @@ GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_PATH", "./credentials.js
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 TIMEZONE = os.getenv("TIMEZONE", "UTC")
 DATABASE_PATH = os.getenv("DATABASE_PATH", "./meals.db")
+DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
 
 # Validate required variables
 if not TELEGRAM_BOT_TOKEN:
