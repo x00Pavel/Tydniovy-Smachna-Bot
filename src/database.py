@@ -151,7 +151,8 @@ class Database:
                     .order_by(UserMealSelection.selected_date)
                     .all()
                 )
-                return selections
+                # Convert date objects to isoformat strings for consistency
+                return [(meal_name, selected_date.isoformat()) for meal_name, selected_date in selections]
         except Exception as e:
             logger.error(f"Error fetching user selections: {e}")
             raise
