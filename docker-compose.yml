@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: vita-tg-bot
+    
+    # Load all environment variables from config file (mounted)
+    env_file:
+      - .env
+    
+    volumes:
+      # Mount credentials file (read-only)
+      - ./credentials.json:/app/data/credentials.json:ro
+      # Persist database across restarts
+      - bot_data:/app/data
+    
+    ports:
+      # Only needed if using webhook mode
+      - "8080:8080"
+    
+    restart: unless-stopped
+    
+    # For webhook mode with reverse proxy (like nginx)
+    # networks:
+    #   - bot_network
+
+volumes:
+  bot_data:
+
+# networks:
+#   bot_network:
+#     driver: bridge
+
