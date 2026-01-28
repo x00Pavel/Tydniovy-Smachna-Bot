@@ -7,6 +7,8 @@ from aiohttp import web
 
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters.command import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
@@ -21,6 +23,12 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+# Define states for conversation
+class AddMealState(StatesGroup):
+    """States for adding a new meal"""
+    waiting_for_meal_name = State()
 
 # Initialize bot and dispatcher
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
@@ -92,11 +100,59 @@ async def cmd_start(message: types.Message):
         await message.answer(
             "Welcome to Meal Planner Bot! 🍽️\n\n"
             "Use /meals to see available meals and plan your week.\n"
-            "Use /view to see your selected meals for this week.",
+            "Use /view to see your selected meals for this week.\n"
+            "Use /addmeal to add a new meal to the sheet.",
             parse_mode="HTML",
         )
     except Exception as e:
         logger.error(f"Error in /start command: {e}")
+
+
+@dp.message(Command("addmeal"))
+async def cmd_addmeal(message: types.Message, state: FSMContext):
+    """Handle /addmeal command - start conversation to add a new meal"""
+    try:
+        await state.set_state(AddMealState.waiting_for_meal_name)
+        await message.answer(
+            "What meal would you like to add? Please enter the meal name:",
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        logger.error(f"Error in /addmeal command: {e}")
+        await message.answer("An error occurred. Please try again.")
+
+
+@dp.message(AddMealState.waiting_for_meal_name)
+async def process_meal_name(message: types.Message, state: FSMContext):
+    """Handle meal name input and add to sheet"""
+    try:
+        meal_name = message.text.strip()
+        
+        if not meal_name or len(meal_name) < 2:
+            await message.answer("Please enter a valid meal name (at least 2 characters).")
+            return
+        
+        # Add meal to Google Sheet
+        success = sheets_client.add_meal(meal_name)
+        
+        if success:
+            await message.answer(
+                f"✅ Meal '<b>{meal_name}</b>' has been added to the sheet!",
+                parse_mode="HTML",
+            )
+            logger.info(f"User {message.from_user.id} added meal: {meal_name}")
+        else:
+            await message.answer(
+                "❌ Failed to add meal to the sheet. Please try again later.",
+                parse_mode="HTML",
+            )
+        
+        await state.clear()
+    except Exception as e:
+        logger.error(f"Error processing meal name: {e}")
+        await message.answer("An error occurred while adding the meal. Please try again.")
+        await state.clear()
+
 
 
 @dp.message(Command("meals"))
