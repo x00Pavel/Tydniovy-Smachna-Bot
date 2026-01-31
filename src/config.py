@@ -1,16 +1,19 @@
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+module_root = Path(__file__).parent.absolute()
+project_root = module_root.parent.absolute()
+
+load_dotenv(f"{project_root}/.env")
 
 # Configuration
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_PATH", "./credentials.json")
+GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_PATH", f"{project_root}/credentials.json")
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 TIMEZONE = os.getenv("TIMEZONE", "UTC")
-DATABASE_PATH = os.getenv("DATABASE_PATH", "./meals.db")
+DATABASE_PATH = os.getenv("DATABASE_PATH", f"{project_root}/meals.db")
 DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
 
 # Webhook configuration (optional - if not set, falls back to polling)

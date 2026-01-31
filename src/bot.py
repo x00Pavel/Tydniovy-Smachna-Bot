@@ -66,9 +66,8 @@ def schedule_midnight_sync():
     logger.info(f"Scheduled daily sync at midnight ({TIMEZONE})")
 
 
-@dp.startup
+@dp.startup()
 async def on_startup():
-    """Handle bot startup"""
     logger.info("Bot starting up...")
     await sync_meals()
 
@@ -84,7 +83,7 @@ async def on_startup():
         logger.info(f"Webhook set to: {webhook_url}")
 
 
-@dp.shutdown
+@dp.shutdown()
 async def on_shutdown():
     """Handle bot shutdown"""
     logger.info("Bot shutting down...")
